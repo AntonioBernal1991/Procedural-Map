@@ -168,13 +168,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _chunkWidth: 13
   _chunkHeight: 13
-  _seed: 0
+  _seed: 5
   _numModules: 508
   _spacing: 1.2
   _cubePrefab: {fileID: 2170776422275495230, guid: 0d16a136a9b5685408356427faf51116, type: 3}
   _groundMaterial: {fileID: 2100000, guid: 3a8b51543e5eb644ab8952171af3b08b, type: 2}
   _grassMaterial: {fileID: 2100000, guid: fadd5e388142f4f4ca3c8db1aac5ea77, type: 2}
-  _moduleSpacing: 1.2
+  _moduleSpacing: 0
 --- !u!1 &705507993
 GameObject:
   m_ObjectHideFlags: 0
@@ -375,7 +375,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8fede6ab4ec6c3c4a87b85a441b31244, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 39.49
 --- !u!114 &963194230
 MonoBehaviour:
   m_ObjectHideFlags: 0

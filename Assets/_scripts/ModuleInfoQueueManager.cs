@@ -2,16 +2,42 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-//Queses the info that the module and path generator needs
+//Queues the info that the module and path generator needs
 public static class ModuleInfoQueueManager
 {
     private static Queue<ModuleInfo> moduleQueue = new Queue<ModuleInfo>();
-
+    private static HashSet<Vector3> usedPositions = new HashSet<Vector3>();
+    
+    /// <summary>
+    /// Verifica si una posición está demasiado cerca de alguna posición existente
+    /// </summary>
+    public static bool IsPositionTooClose(Vector3 newPosition, float minDistance)
+    {
+        foreach (Vector3 existingPosition in usedPositions)
+        {
+            float distance = Vector3.Distance(newPosition, existingPosition);
+            if (distance < minDistance)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    
     /// <summary>
     /// Enqueues a ModuleInfo onto the queue.
     /// </summary>
     public static void Enqueue(ModuleInfo module)
     {
+        // Check if exact position already exists (prevent exact duplicates)
+        if (usedPositions.Contains(module.NextModulePosition))
+        {
+            Debug.LogWarning($"Module position {module.NextModulePosition} already exists. Skipping duplicate.");
+            return;
+        }
+        
+        usedPositions.Add(module.NextModulePosition);
         moduleQueue.Enqueue(module);
         Debug.Log($"Enqueued {module} to the queue. Queue size is now {moduleQueue.Count}.");
     }
@@ -61,6 +87,7 @@ public static class ModuleInfoQueueManager
     public static void Clear()
     {
         moduleQueue.Clear();
+        usedPositions.Clear();
         Debug.Log("Cleared the queue.");
     }
 }
