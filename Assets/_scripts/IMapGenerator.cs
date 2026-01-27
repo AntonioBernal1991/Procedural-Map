@@ -19,6 +19,12 @@ public interface IMapGenerator
     Vector2Int LastExit { get; set; }
     CurrentDirection LastDirection { get; set; }
     PathGenerator PathGenerator { get; }
+    
+    // Voronoi Cave properties
+    bool UseVoronoiCaves { get; }
+    int VoronoiSeeds { get; }
+    float VoronoiThreshold { get; }
+    float VoronoiVariation { get; }
 }
 
 

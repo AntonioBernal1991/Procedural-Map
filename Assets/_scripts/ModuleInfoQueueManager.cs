@@ -7,6 +7,8 @@ public static class ModuleInfoQueueManager
 {
     private static Queue<ModuleInfo> moduleQueue = new Queue<ModuleInfo>();
     private static HashSet<Vector3> usedPositions = new HashSet<Vector3>();
+
+    // Logs removed for performance/clean console.
     
     /// <summary>
     /// Verifica si una posición está demasiado cerca de alguna posición existente
@@ -24,7 +26,7 @@ public static class ModuleInfoQueueManager
         return false;
     }
     
-    
+
     /// <summary>
     /// Enqueues a ModuleInfo onto the queue.
     /// </summary>
@@ -33,13 +35,11 @@ public static class ModuleInfoQueueManager
         // Check if exact position already exists (prevent exact duplicates)
         if (usedPositions.Contains(module.NextModulePosition))
         {
-            Debug.LogWarning($"Module position {module.NextModulePosition} already exists. Skipping duplicate.");
             return;
         }
         
         usedPositions.Add(module.NextModulePosition);
         moduleQueue.Enqueue(module);
-        Debug.Log($"Enqueued {module} to the queue. Queue size is now {moduleQueue.Count}.");
     }
 
     /// <summary>
@@ -50,12 +50,10 @@ public static class ModuleInfoQueueManager
         if (moduleQueue.Count > 0)
         {
             ModuleInfo dequeuedModule = moduleQueue.Dequeue();
-            Debug.Log($"Dequeued {dequeuedModule} from the queue. Queue size is now {moduleQueue.Count}.");
             return dequeuedModule;
         }
         else
         {
-            Debug.LogWarning("Attempted to dequeue from an empty queue.");
             return null; // Return null if the queue is empty
         }
     }
@@ -71,7 +69,6 @@ public static class ModuleInfoQueueManager
         }
         else
         {
-            Debug.LogWarning("Attempted to peek at an empty queue.");
             return null;
         }
     }
@@ -88,6 +85,5 @@ public static class ModuleInfoQueueManager
     {
         moduleQueue.Clear();
         usedPositions.Clear();
-        Debug.Log("Cleared the queue.");
     }
 }

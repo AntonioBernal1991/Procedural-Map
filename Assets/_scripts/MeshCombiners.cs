@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 
 //unifies the meshes of the cubes winning up to 100 fps
@@ -14,13 +15,28 @@ public class MeshCombiner
             return;
         }
 
+        // Combined colliders: use the combined mesh as the collider (one per material),
+        // avoiding per-cube collider seams that cause bouncy contacts.
+        // Note: if you rotate/move the maze physically, MeshCollider-based collision can be less stable than primitives,
+        // but it removes the cube-by-cube "steps" from having individual colliders.
+        // MapGenerator3D no longer controls physics optimization; keep it simple:
+        // combine visuals only, keep per-cube colliders for stable camera collision.
+        bool useCombinedColliders = false;
        
         Dictionary<Material, List<CombineInstance>> combineInstancesByMaterial = new Dictionary<Material, List<CombineInstance>>();
+        List<GameObject> originals = useCombinedColliders ? new List<GameObject>() : null;
+        // If we're combining visuals (and not using combined colliders), we will hide the original renderers
+        // ONLY if we actually end up combining (eligible > 1). Otherwise we would accidentally make a module invisible.
+        List<MeshRenderer> renderersToDisable = !useCombinedColliders ? new List<MeshRenderer>() : null;
+        int eligible = 0;
 
         // Collects meshes and sort by material
         foreach (MeshFilter meshFilter in meshFilters)
         {
             if (meshFilter.sharedMesh == null) continue;
+            // Don't include the invisible base collider plane in visual mesh combining (prevents z-fighting / extra geometry).
+            if (meshFilter.gameObject.name == "BasePlane") continue;
+            if (meshFilter.gameObject.name.Contains("_Combined")) continue;
 
             MeshRenderer renderer = meshFilter.GetComponent<MeshRenderer>();
             if (renderer == null || renderer.sharedMaterial == null) continue;
@@ -40,7 +56,30 @@ public class MeshCombiner
             };
 
             combineInstancesByMaterial[material].Add(combineInstance);
-            meshFilter.gameObject.SetActive(false); 
+            eligible++;
+            if (useCombinedColliders && originals != null) originals.Add(meshFilter.gameObject);
+
+            if (!useCombinedColliders)
+            {
+                // Keep colliders (if any). We'll hide originals visually only if we actually combine.
+                MeshRenderer mr = meshFilter.GetComponent<MeshRenderer>();
+                if (mr != null) renderersToDisable.Add(mr);
+            }
+        }
+
+        // If there's 0 or 1 eligible mesh, combining would just add overhead.
+        if (eligible <= 1)
+        {
+            return;
+        }
+
+        // Hide originals visually now that we know we are combining.
+        if (!useCombinedColliders && renderersToDisable != null)
+        {
+            foreach (MeshRenderer mr in renderersToDisable)
+            {
+                if (mr != null) mr.enabled = false;
+            }
         }
 
         // creates a mesh combine for each material
@@ -60,9 +99,37 @@ public class MeshCombiner
 
             combinedMeshFilter.mesh = new Mesh();
             combinedMeshFilter.mesh.CombineMeshes(combineInstances.ToArray(), true, true);
-            combinedMeshRenderer.material = material;
+            // Use sharedMaterial to avoid instantiating a unique material per combined mesh.
+            combinedMeshRenderer.sharedMaterial = material;
+            // Priority 1 FPS win: shadows from thousands of tiles are extremely expensive.
+            combinedMeshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            combinedMeshRenderer.receiveShadows = false;
+
+            if (useCombinedColliders)
+            {
+                // Static environment collision: non-convex mesh collider is usually correct.
+                MeshCollider mc = combinedObject.AddComponent<MeshCollider>();
+                mc.sharedMesh = combinedMeshFilter.mesh;
+                // Only make the GROUND collider convex (flat, safe). Keep others non-convex to avoid blocking at module edges.
+                mc.convex = MapGenerator3D.Instance != null && material == MapGenerator3D.Instance.GroundMaterial;
+                if (MapGenerator3D.Instance != null && material == MapGenerator3D.Instance.GroundMaterial)
+                {
+                    mc.material = MapGenerator3D.Instance.GroundPhysicMaterial;
+                }
+                // Faster collision cooking for static environment meshes.
+                mc.cookingOptions = MeshColliderCookingOptions.CookForFasterSimulation | MeshColliderCookingOptions.EnableMeshCleaning;
+            }
 
             combinedObject.SetActive(true);
+        }
+
+        if (useCombinedColliders && originals != null)
+        {
+            // Disable originals completely (removes per-cube colliders).
+            foreach (GameObject go in originals)
+            {
+                if (go != null) go.SetActive(false);
+            }
         }
 
     }
