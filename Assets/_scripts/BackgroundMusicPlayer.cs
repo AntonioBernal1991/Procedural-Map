@@ -128,6 +128,22 @@ public class BackgroundMusicPlayer : MonoBehaviour
     }
 
     /// <summary>
+    /// Returns whether the active BackgroundMusicPlayer AudioSource is currently playing.
+    /// Returns true if an instance existed and a value was returned.
+    /// </summary>
+    public static bool TryIsMusicPlaying(out bool isPlaying)
+    {
+        if (_instance == null)
+        {
+            isPlaying = false;
+            return false;
+        }
+
+        isPlaying = _instance.IsMusicPlaying();
+        return true;
+    }
+
+    /// <summary>
     /// Stops playback for this component's AudioSource.
     /// </summary>
     public void StopMusic()
@@ -236,6 +252,12 @@ public class BackgroundMusicPlayer : MonoBehaviour
         if (_source == null) _source = GetComponent<AudioSource>();
         if (_source == null) return 0f;
         return Mathf.Clamp(_source.panStereo, -1f, 1f);
+    }
+
+    public bool IsMusicPlaying()
+    {
+        if (_source == null) _source = GetComponent<AudioSource>();
+        return _source != null && _source.isPlaying;
     }
 
     private System.Collections.IEnumerator FadeOutRoutine(float durationSeconds, bool stopAtEnd)

@@ -26,6 +26,8 @@ public class MazeEndTriggerLookAt : MonoBehaviour
     [SerializeField] private float delaySeconds = 0f;
     [Tooltip("If true, this trigger will only fire once.")]
     [SerializeField] private bool triggerOnce = true;
+    [Tooltip("If true, disables the camera turning controls (A/D + swipe) when this trigger is hit.")]
+    [SerializeField] private bool disableCameraTurningOnTrigger = true;
 
     private bool _hasTriggered;
 
@@ -65,6 +67,18 @@ public class MazeEndTriggerLookAt : MonoBehaviour
         }
 
         _hasTriggered = true;
+
+        if (disableCameraTurningOnTrigger)
+        {
+            // Disable turning immediately when reaching the end trigger (so input can't fight the look-at).
+            Camera cam = Camera.main;
+            if (cam != null)
+            {
+                AutoForwardCameraController c = cam.GetComponent<AutoForwardCameraController>();
+                if (c != null) c.SetTurningEnabled(false);
+            }
+        }
+
         StartCoroutine(TriggerRoutine());
     }
 

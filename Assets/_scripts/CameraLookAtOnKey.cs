@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.Serialization;
+using System.Collections.Generic;
 
 /// <summary>
 /// Attach to the Main Camera. When you press a key (default K), the camera rotates to look at a target (eye).
@@ -26,8 +28,12 @@ public class CameraLookAtOnKey : MonoBehaviour
     [SerializeField] private float fovDuration = 2f;
 
     [Header("On FOV Reached (looking)")]
-    [Tooltip("Optional: activated right after FOV finishes animating to Target FOV (only when toggling to 'look at target').")]
-    [SerializeField] private GameObject activateOnFovReached;
+    [Tooltip("Optional legacy single object: activated right after FOV finishes animating to Target FOV (only when toggling to 'look at target').")]
+    [FormerlySerializedAs("activateOnFovReached")]
+    [SerializeField] private GameObject activateOnFovReachedLegacy;
+
+    [Tooltip("Optional list. If size >= 2: activates [0] when music is NOT playing, and [1] when music IS playing (at the moment FOV is reached). Other entries are deactivated.")]
+    [SerializeField] private List<GameObject> activateOnFovReachedList = new List<GameObject>(2);
 
     [Header("On FOV Reached (looking) - Audio")]
     [Tooltip("If true, stops the background music when 'Activate On FOV Reached' is triggered.")]
@@ -109,9 +115,24 @@ public class CameraLookAtOnKey : MonoBehaviour
         if (!_pendingActivateOnFovReached) return;
         _pendingActivateOnFovReached = false;
 
-        if (activateOnFovReached != null)
+        // Activate UI based on whether music is currently playing.
+        if (activateOnFovReachedList != null && activateOnFovReachedList.Count >= 2)
         {
-            activateOnFovReached.SetActive(true);
+            bool playing = false;
+            BackgroundMusicPlayer.TryIsMusicPlaying(out playing);
+            int index = playing ? 1 : 0;
+
+            for (int i = 0; i < activateOnFovReachedList.Count; i++)
+            {
+                GameObject go = activateOnFovReachedList[i];
+                if (go == null) continue;
+                go.SetActive(i == index);
+            }
+        }
+        else if (activateOnFovReachedLegacy != null)
+        {
+            // Backward compatibility for old scenes.
+            activateOnFovReachedLegacy.SetActive(true);
         }
 
         if (stopMusicOnFovReached)

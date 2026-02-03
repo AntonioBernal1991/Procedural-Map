@@ -18,9 +18,20 @@ public class AutoForwardCameraController : MonoBehaviour
     [SerializeField] private LayerMask obstacleMask = ~0;
     [SerializeField] private QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Ignore;
 
+    [Header("Collision Feel")]
+    [Tooltip("Only stop when the obstacle is really in front. Uses dot(hitNormal, forward). -1 = head-on, 0 = side wall.")]
+    [SerializeField] [Range(-1f, 0f)] private float stopWhenFacingDotIsAtMost = -0.85f;
+    [Tooltip("If the obstacle is somewhat in front (but not head-on), slide along it instead of stopping. " +
+             "Uses dot(hitNormal, forward). Values closer to 0 mean more permissive sliding.")]
+    [SerializeField] [Range(-1f, 0f)] private float slideWhenFacingDotIsAtMost = -0.2f;
+
     [Header("Turning")]
     [Tooltip("Seconds to complete a 90-degree turn. 0 = instant.")]
     [SerializeField] private float turnDuration = 0.12f;
+
+    [Header("Turning Control")]
+    [Tooltip("Master toggle for turning input (A/D + swipe). Useful for cutscenes/end triggers.")]
+    [SerializeField] private bool turningEnabled = true;
 
     [Header("Mobile Turning (Swipe)")]
     [Tooltip("Enable swipe left/right as an alternative to A/D for turning 90 degrees.")]
@@ -68,6 +79,14 @@ public class AutoForwardCameraController : MonoBehaviour
 
     private void HandleTurningInput()
     {
+        if (!turningEnabled)
+        {
+            // Ensure we don't carry pending swipe/turn state while disabled.
+            _swipeTracking = false;
+            _swipeTurnLeft = false;
+            _swipeTurnRight = false;
+            return;
+        }
         if (_isTurning) return;
 
         TickSwipeInput();
@@ -174,6 +193,22 @@ public class AutoForwardCameraController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Enable/disable turning input at runtime (A/D + swipe). Intended for end triggers / cutscenes.
+    /// </summary>
+    public void SetTurningEnabled(bool enabled, bool cancelCurrentTurn = true)
+    {
+        turningEnabled = enabled;
+        _swipeTracking = false;
+        _swipeTurnLeft = false;
+        _swipeTurnRight = false;
+
+        if (!enabled && cancelCurrentTurn)
+        {
+            _isTurning = false;
+        }
+    }
+
     private void TickTurn(float dt)
     {
         if (!_isTurning) return;
@@ -200,14 +235,14 @@ public class AutoForwardCameraController : MonoBehaviour
         if (forward.sqrMagnitude < 0.0001f) return;
         forward.Normalize();
 
-        bool blocked = IsBlocked(forward);
-        if (!blocked)
+        Vector3 moveDir = GetMoveDirection(forward);
+        if (moveDir.sqrMagnitude > 0.0001f)
         {
-            _cc.Move(forward * (moveSpeed * dt));
+            _cc.Move(moveDir * (moveSpeed * dt));
         }
     }
 
-    private bool IsBlocked(Vector3 planarForward)
+    private Vector3 GetMoveDirection(Vector3 planarForward)
     {
         // Use a CapsuleCast that matches the CharacterController shape (more reliable than a simple sphere cast),
         // and ignore side-wall touches so we only stop when something is actually in front.
@@ -231,17 +266,25 @@ public class AutoForwardCameraController : MonoBehaviour
         }
 
         bool hit = Physics.CapsuleCast(p1, p2, radius, planarForward, out RaycastHit info, dist, obstacleMask, triggerInteraction);
-        if (!hit) return false;
+        if (!hit) return planarForward;
 
         // Ignore ground-ish hits: if the normal is strongly upward, it's probably the floor edge.
-        if (Vector3.Dot(info.normal, Vector3.up) > 0.75f) return false;
+        if (Vector3.Dot(info.normal, Vector3.up) > 0.75f) return planarForward;
 
-        // Ignore side walls: only treat as blocked if the surface normal faces us (i.e., mostly opposite to forward).
         // For a wall directly in front, dot(normal, forward) ~ -1. For side wall, ~0.
         float facing = Vector3.Dot(info.normal, planarForward);
-        if (facing > -0.5f) return false;
 
-        return true;
+        // Completely ignore side-ish contacts.
+        if (facing > slideWhenFacingDotIsAtMost) return planarForward;
+
+        // Stop only when it's really head-on.
+        if (facing <= stopWhenFacingDotIsAtMost) return Vector3.zero;
+
+        // Otherwise, it's a "grazing" hit: slide along the wall instead of stopping.
+        Vector3 slide = Vector3.ProjectOnPlane(planarForward, info.normal);
+        slide.y = 0f;
+        if (slide.sqrMagnitude < 0.0001f) return Vector3.zero;
+        return slide.normalized;
     }
 }
 
