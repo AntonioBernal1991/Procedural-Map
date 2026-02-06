@@ -33,6 +33,12 @@ public class AutoForwardCameraController : MonoBehaviour
     [Tooltip("Master toggle for turning input (A/D + swipe). Useful for cutscenes/end triggers.")]
     [SerializeField] private bool turningEnabled = true;
 
+    [Header("Keys / Inventory")]
+    [Tooltip("Runtime flag: set to true when the player picks up a key.")]
+    [SerializeField] private bool hasKey = false;
+    [Tooltip("If true, shows the LockedCube prompt only when the player does NOT have a key (typical 'need key' UX).")]
+    [SerializeField] private bool showLockedPromptOnlyWhenNoKey = true;
+
     [Header("Mobile Turning (Swipe)")]
     [Tooltip("Enable swipe left/right as an alternative to A/D for turning 90 degrees.")]
     [SerializeField] private bool enableSwipeTurns = true;
@@ -52,6 +58,10 @@ public class AutoForwardCameraController : MonoBehaviour
     [Header("Debug")]
     [SerializeField] private bool debugDraw = false;
 
+    [Header("Rendering (camera)")]
+    [Tooltip("Disables Camera Occlusion Culling at runtime. Recommended for procedural/dynamic levels with baked occlusion data, to avoid pop-in holes.")]
+    [SerializeField] private bool disableOcclusionCulling = true;
+
     private CharacterController _cc;
     private bool _isTurning;
     private Quaternion _turnFrom;
@@ -65,9 +75,31 @@ public class AutoForwardCameraController : MonoBehaviour
     private bool _swipeTurnLeft;
     private bool _swipeTurnRight;
 
+    private LockedCube _lockedPromptTarget;
+
     private void Awake()
     {
         _cc = GetComponent<CharacterController>();
+
+        if (disableOcclusionCulling)
+        {
+            Camera cam = GetComponent<Camera>();
+            if (cam != null) cam.useOcclusionCulling = false;
+        }
+    }
+
+    public bool HasKey => hasKey;
+
+    public void GiveKey()
+    {
+        hasKey = true;
+    }
+
+    public bool ConsumeKey()
+    {
+        if (!hasKey) return false;
+        hasKey = false;
+        return true;
     }
 
     private void Update()
@@ -266,13 +298,39 @@ public class AutoForwardCameraController : MonoBehaviour
         }
 
         bool hit = Physics.CapsuleCast(p1, p2, radius, planarForward, out RaycastHit info, dist, obstacleMask, triggerInteraction);
-        if (!hit) return planarForward;
+        if (!hit)
+        {
+            UpdateLockedPrompt(null, false);
+            return planarForward;
+        }
 
         // Ignore ground-ish hits: if the normal is strongly upward, it's probably the floor edge.
-        if (Vector3.Dot(info.normal, Vector3.up) > 0.75f) return planarForward;
+        if (Vector3.Dot(info.normal, Vector3.up) > 0.75f)
+        {
+            UpdateLockedPrompt(null, false);
+            return planarForward;
+        }
 
         // For a wall directly in front, dot(normal, forward) ~ -1. For side wall, ~0.
         float facing = Vector3.Dot(info.normal, planarForward);
+
+        // Proximity prompt for locked cubes: show/hide based on cast (works even if we stop before triggers).
+        LockedCube locked = info.collider != null ? info.collider.GetComponentInParent<LockedCube>() : null;
+        bool shouldShowPrompt = locked != null && !locked.IsUnlocked;
+        if (shouldShowPrompt && showLockedPromptOnlyWhenNoKey && hasKey) shouldShowPrompt = false;
+        // Only show when it's not a pure side graze (same rule we use for movement logic).
+        if (shouldShowPrompt && facing > slideWhenFacingDotIsAtMost) shouldShowPrompt = false;
+        UpdateLockedPrompt(locked, shouldShowPrompt);
+
+        // If we hit a locked cube and we have a key, unlock it and keep moving.
+        if (locked != null && hasKey)
+        {
+            if (locked.TryUnlock(this))
+            {
+                UpdateLockedPrompt(locked, false);
+                return planarForward;
+            }
+        }
 
         // Completely ignore side-ish contacts.
         if (facing > slideWhenFacingDotIsAtMost) return planarForward;
@@ -285,6 +343,21 @@ public class AutoForwardCameraController : MonoBehaviour
         slide.y = 0f;
         if (slide.sqrMagnitude < 0.0001f) return Vector3.zero;
         return slide.normalized;
+    }
+
+    private void UpdateLockedPrompt(LockedCube locked, bool active)
+    {
+        if (_lockedPromptTarget != null && _lockedPromptTarget != locked)
+        {
+            _lockedPromptTarget.SetProximityPromptActive(false);
+        }
+
+        _lockedPromptTarget = locked;
+
+        if (_lockedPromptTarget != null)
+        {
+            _lockedPromptTarget.SetProximityPromptActive(active);
+        }
     }
 }
 

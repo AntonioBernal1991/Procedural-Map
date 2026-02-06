@@ -218,14 +218,17 @@ public class ModuleGenerator
         int moduleSeed = Mathf.RoundToInt(modulePosition.x * 1000 + modulePosition.z * 10000);
         VoronoiGenerator voronoi = new VoronoiGenerator(mapWidth, mapHeight, moduleSeed);
         
-        // Generar máscara de cuevas usando Voronoi orgánico
-        bool[,] caveMask = voronoi.GenerateOrganicCaveMask(
+        // Decide shape per module using percentages from MapGenerator.
+        VoronoiGenerator.VoronoiCaveShape shape = ChooseVoronoiShapeForModule(moduleSeed);
+
+        bool[,] caveMask = voronoi.GenerateVoronoiCaveMask(
             voronoiSeeds, 
             voronoiThreshold, 
             voronoiVariation, 
+            shape,
+            _mapGenerator.VoronoiCrossArmWidthFactor,
             true, // Preservar caminos
-            pathTiles
-        );
+            pathTiles);
         
         // Aplicar la máscara: eliminar cubos marcados como cueva
         for (int x = 0; x < mapWidth; x++)
@@ -240,5 +243,36 @@ public class ModuleGenerator
                 }
             }
         }
+    }
+
+    private VoronoiGenerator.VoronoiCaveShape ChooseVoronoiShapeForModule(int moduleSeed)
+    {
+        // Percent weights (0..100). Organic is the leftover (falls back to Circle).
+        float circle = Mathf.Clamp(_mapGenerator.VoronoiCirclePercent, 0f, 100f);
+        float square = Mathf.Clamp(_mapGenerator.VoronoiSquarePercent, 0f, 100f);
+        float cross = Mathf.Clamp(_mapGenerator.VoronoiCrossPercent, 0f, 100f);
+
+        float sum = circle + square + cross;
+        if (sum <= 0.0001f)
+        {
+            return VoronoiGenerator.VoronoiCaveShape.Circle;
+        }
+
+        // Normalize if user overshoots 100 (keeps proportions).
+        if (sum > 100f)
+        {
+            float k = 100f / sum;
+            circle *= k; square *= k; cross *= k;
+            sum = 100f;
+        }
+
+        // Deterministic pick per module.
+        System.Random r = new System.Random(moduleSeed ^ 0x51F4A2B);
+        float roll = (float)(r.NextDouble() * sum);
+
+        if (roll < circle) return VoronoiGenerator.VoronoiCaveShape.Circle;
+        roll -= circle;
+        if (roll < square) return VoronoiGenerator.VoronoiCaveShape.Square;
+        return VoronoiGenerator.VoronoiCaveShape.Cross;
     }
 }

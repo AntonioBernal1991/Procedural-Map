@@ -46,7 +46,9 @@ public class ModuleCenterHighlighter : MonoBehaviour
     [SerializeField] private string _baseColorProperty = "_BaseColor";
 
     [Header("Debug")]
-    [SerializeField] private bool _logResult = true;
+    [SerializeField] private bool _logResult = false;
+    [Tooltip("If false, suppresses logs while in Play Mode (prevents console spam).")]
+    [SerializeField] private bool _logInPlayMode = false;
     [SerializeField] private bool _drawGizmos = true;
 
     private struct HighlightState
@@ -94,14 +96,14 @@ public class ModuleCenterHighlighter : MonoBehaviour
         if (_targetScope == TargetScope.ThisIsTheMapRoot)
         {
             int modules = HighlightAllModulesUnderMapRoot();
-            if (_logResult) Debug.Log($"[{nameof(ModuleCenterHighlighter)}] Highlighted {modules} module center cube(s) under '{name}'.", this);
+            if (ShouldLog()) Debug.Log($"[{nameof(ModuleCenterHighlighter)}] Highlighted {modules} module center cube(s) under '{name}'.", this);
             return;
         }
 
         // Single-module mode (original behavior)
         if (!TryComputeModuleBounds(transform, out _lastBounds))
         {
-            if (_logResult) Debug.LogWarning($"[{nameof(ModuleCenterHighlighter)}] No child renderers found under '{name}'.", this);
+            if (ShouldLog()) Debug.LogWarning($"[{nameof(ModuleCenterHighlighter)}] No child renderers found under '{name}'.", this);
             _hasLastBounds = false;
             return;
         }
@@ -110,13 +112,13 @@ public class ModuleCenterHighlighter : MonoBehaviour
 
         if (!TryFindClosestRendererToPoint(transform, _lastBounds.center, out Renderer centerRenderer))
         {
-            if (_logResult) Debug.LogWarning($"[{nameof(ModuleCenterHighlighter)}] Could not find a center cube renderer under '{name}'.", this);
+            if (ShouldLog()) Debug.LogWarning($"[{nameof(ModuleCenterHighlighter)}] Could not find a center cube renderer under '{name}'.", this);
             return;
         }
 
         ApplyHighlight(centerRenderer);
 
-        if (_logResult)
+        if (ShouldLog())
         {
             Debug.Log($"[{nameof(ModuleCenterHighlighter)}] Module '{name}' center renderer: '{centerRenderer.name}' at {centerRenderer.transform.position}", this);
         }
@@ -151,13 +153,20 @@ public class ModuleCenterHighlighter : MonoBehaviour
             _lastBounds = bounds;
             _hasLastBounds = true;
 
-            if (_logResult)
+            if (ShouldLog())
             {
                 Debug.Log($"[{nameof(ModuleCenterHighlighter)}] Module '{t.name}' center renderer: '{centerRenderer.name}' at {centerRenderer.transform.position}", t);
             }
         }
 
         return highlightedModules;
+    }
+
+    private bool ShouldLog()
+    {
+        if (!_logResult) return false;
+        if (!Application.isPlaying) return true;
+        return _logInPlayMode;
     }
 
     private bool TryComputeModuleBounds(Transform root, out Bounds bounds)

@@ -6,6 +6,16 @@ using UnityEngine;
 /// </summary>
 public class VoronoiGenerator
 {
+    public enum VoronoiCaveShape
+    {
+        /// <summary>Classic Voronoi blobs using euclidean distance (roughly circular).</summary>
+        Circle = 0,
+        /// <summary>Voronoi blobs using Chebyshev distance (square-ish).</summary>
+        Square = 1,
+        /// <summary>Plus/cross shapes around each seed (bounded by threshold).</summary>
+        Cross = 2
+    }
+
     private System.Random _random;
     private int _mapWidth;
     private int _mapHeight;
@@ -139,23 +149,36 @@ public class VoronoiGenerator
     /// </summary>
     public bool[,] GenerateOrganicCaveMask(int numSeeds, float baseThreshold, float thresholdVariation, bool preservePaths = true, HashSet<Vector2Int> pathTiles = null)
     {
+        // Backward compatible: organic mask = euclidean blobs (circle-like).
+        return GenerateVoronoiCaveMask(numSeeds, baseThreshold, thresholdVariation, VoronoiCaveShape.Circle, 0.25f, preservePaths, pathTiles);
+    }
+
+    /// <summary>
+    /// Voronoi cave mask with selectable shape (circle/square/cross) and per-seed threshold variation.
+    /// </summary>
+    public bool[,] GenerateVoronoiCaveMask(
+        int numSeeds,
+        float baseThreshold,
+        float thresholdVariation,
+        VoronoiCaveShape shape,
+        float crossArmWidthFactor = 0.25f,
+        bool preservePaths = true,
+        HashSet<Vector2Int> pathTiles = null)
+    {
         bool[,] caveMask = new bool[_mapWidth, _mapHeight];
         List<Vector2> seeds = GenerateSeeds(numSeeds);
-        List<float> seedThresholds = new List<float>();
+        List<float> seedThresholds = new List<float>(seeds.Count);
         
-        // Asignar umbral variable a cada semilla para crear zonas de diferentes tamaños
-        // Con variación reducida para hacerlas más simétricas
+        // Per-seed threshold variation.
         for (int i = 0; i < seeds.Count; i++)
         {
-            // Usar distribución más uniforme para simetría
-            float variation = (float)(_random.NextDouble() * 2.0 - 1.0) * thresholdVariation; // -variation a +variation
+            float variation = (float)(_random.NextDouble() * 2.0 - 1.0) * thresholdVariation; // -variation .. +variation
             float threshold = baseThreshold + variation;
-            // Asegurar que el umbral mínimo sea razonable para mantener simetría
             threshold = Mathf.Max(threshold, baseThreshold * 0.7f);
             seedThresholds.Add(threshold);
         }
         
-        // Inicializar todo como pared
+        // Init walls.
         for (int x = 0; x < _mapWidth; x++)
         {
             for (int z = 0; z < _mapHeight; z++)
@@ -164,41 +187,65 @@ public class VoronoiGenerator
             }
         }
         
-        // Marcar zonas de cueva
+        // Mark caves.
         for (int x = 0; x < _mapWidth; x++)
         {
             for (int z = 0; z < _mapHeight; z++)
             {
                 Vector2Int tilePos = new Vector2Int(x, z);
                 
-                // Preservar caminos si está activado
                 if (preservePaths && pathTiles != null && pathTiles.Contains(tilePos))
                 {
                     caveMask[x, z] = false;
                     continue;
                 }
                 
-                // Encontrar semilla más cercana y usar su umbral específico
-                int closestIndex = GetClosestSeedIndex(x, z, seeds);
-                float distance = Vector2.Distance(new Vector2(x, z), seeds[closestIndex]);
-                float threshold = seedThresholds[closestIndex];
-                
-                // Usar distancia euclidiana estándar para mantener simetría circular
-                // Aplicar un suavizado para hacer las transiciones más suaves y simétricas
-                if (distance <= threshold)
+                float bestDist = float.PositiveInfinity;
+                float bestThreshold = baseThreshold;
+
+                for (int i = 0; i < seeds.Count; i++)
                 {
-                    caveMask[x, z] = true; // Cueva
+                    float threshold = seedThresholds[i];
+                    float d = DistanceToSeedByShape(x, z, seeds[i], shape, threshold, crossArmWidthFactor);
+                    if (d < bestDist)
+                {
+                        bestDist = d;
+                        bestThreshold = threshold;
+                    }
                 }
-                // Opcional: agregar un pequeño margen suave para transiciones más naturales
-                else if (distance <= threshold * 1.1f)
+
+                if (bestDist <= bestThreshold)
                 {
-                    // Zona de transición suave (opcional, puede comentarse si se quiere más definido)
-                    // Por ahora lo dejamos sin transición para mantener simetría clara
+                    caveMask[x, z] = true;
                 }
             }
         }
         
         return caveMask;
+    }
+
+    private static float DistanceToSeedByShape(int x, int z, Vector2 seed, VoronoiCaveShape shape, float threshold, float crossArmWidthFactor)
+    {
+        float dx = Mathf.Abs(x - seed.x);
+        float dz = Mathf.Abs(z - seed.y);
+
+        switch (shape)
+        {
+            case VoronoiCaveShape.Square:
+                // Chebyshev distance => square-ish blobs.
+                return Mathf.Max(dx, dz);
+            case VoronoiCaveShape.Cross:
+                // Bounded plus sign: two arms crossing at the seed.
+                // Arm width is a fraction of the threshold (clamped).
+                float arm = Mathf.Clamp(threshold * Mathf.Max(0f, crossArmWidthFactor), 0.5f, Mathf.Max(0.5f, threshold));
+                if (dx <= arm) return dz;
+                if (dz <= arm) return dx;
+                return float.PositiveInfinity;
+            case VoronoiCaveShape.Circle:
+            default:
+                // Euclidean distance => circular blobs.
+                return Mathf.Sqrt(dx * dx + dz * dz);
+        }
     }
     
     /// <summary>

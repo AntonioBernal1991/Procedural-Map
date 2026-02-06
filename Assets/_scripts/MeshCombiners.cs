@@ -97,8 +97,14 @@ public class MeshCombiner
             MeshFilter combinedMeshFilter = combinedObject.AddComponent<MeshFilter>();
             MeshRenderer combinedMeshRenderer = combinedObject.AddComponent<MeshRenderer>();
 
-            combinedMeshFilter.mesh = new Mesh();
-            combinedMeshFilter.mesh.CombineMeshes(combineInstances.ToArray(), true, true);
+            // Build combined mesh safely:
+            // - Use 32-bit indices to avoid overflow when combining lots of tiles.
+            // - Recalculate bounds so frustum culling doesn't pop parts in/out.
+            Mesh combined = new Mesh();
+            combined.indexFormat = IndexFormat.UInt32;
+            combined.CombineMeshes(combineInstances.ToArray(), true, true);
+            combined.RecalculateBounds();
+            combinedMeshFilter.sharedMesh = combined;
             // Use sharedMaterial to avoid instantiating a unique material per combined mesh.
             combinedMeshRenderer.sharedMaterial = material;
             // Priority 1 FPS win: shadows from thousands of tiles are extremely expensive.

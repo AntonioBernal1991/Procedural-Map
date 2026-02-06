@@ -70,7 +70,7 @@ Material:
     - _irisSize: 1.88
     - _limbus: 0.3
     - _parallax: 0.05
-    - _pupilSize: 2.0766366e-14
+    - _pupilSize: 0
     - _reflectMaskAmt: 0
     - _reflectTerm: 0.025
     - _scleraShadowAmt: 0

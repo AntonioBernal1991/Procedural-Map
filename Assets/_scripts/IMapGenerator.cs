@@ -25,6 +25,12 @@ public interface IMapGenerator
     int VoronoiSeeds { get; }
     float VoronoiThreshold { get; }
     float VoronoiVariation { get; }
+
+    // Voronoi Cave shape probabilities (percent 0..100). Organic is the leftover.
+    float VoronoiCirclePercent { get; }
+    float VoronoiSquarePercent { get; }
+    float VoronoiCrossPercent { get; }
+    float VoronoiCrossArmWidthFactor { get; }
 }
 
 

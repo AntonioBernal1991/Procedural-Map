@@ -97,6 +97,9 @@ public class MazeEndTriggerLookAt : MonoBehaviour
 
         if (cameraLookAt != null)
         {
+            // Decide which UI to show based on music state AT THE MOMENT we cross the trigger,
+            // but still activate it only when FOV animation finishes.
+            cameraLookAt.CacheMusicStateForFovReachedActivation();
             cameraLookAt.StartLookAtTarget();
         }
         else

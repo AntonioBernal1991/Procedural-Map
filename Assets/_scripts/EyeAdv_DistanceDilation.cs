@@ -61,6 +61,19 @@ public class EyeAdv_DistanceDilation : MonoBehaviour
     private float _vel;
     private float _nextLogTime;
 
+    [ContextMenu("Enable Debug Distance Log")]
+    private void EnableDebugDistanceLog()
+    {
+        debugLogDistance = true;
+        _nextLogTime = 0f;
+    }
+
+    [ContextMenu("Disable Debug Distance Log")]
+    private void DisableDebugDistanceLog()
+    {
+        debugLogDistance = false;
+    }
+
     private void Awake()
     {
         _renderer = GetComponent<Renderer>();
@@ -93,15 +106,7 @@ public class EyeAdv_DistanceDilation : MonoBehaviour
         }
 
         bool hasProp = HasPupilProperty();
-        if (!hasProp)
-        {
-            if (debugLogDistance && Time.unscaledTime >= _nextLogTime)
-            {
-                _nextLogTime = Time.unscaledTime + Mathf.Max(0.05f, debugLogIntervalSeconds);
-                Debug.LogWarning("[EyeAdv_DistanceDilation] Renderer material has no _pupilSize property. Check the correct Renderer/material.", this);
-            }
-            return;
-        }
+        if (!hasProp) return;
 
         if (writeToSharedMaterial)
         {
@@ -115,13 +120,7 @@ public class EyeAdv_DistanceDilation : MonoBehaviour
             _renderer.SetPropertyBlock(_mpb);
         }
 
-        if (debugLogDistance && Time.unscaledTime >= _nextLogTime)
-        {
-            _nextLogTime = Time.unscaledTime + Mathf.Max(0.05f, debugLogIntervalSeconds);
-            Debug.Log(
-                $"[EyeAdv_DistanceDilation] d={d:F2} mapped={mapped:F2} base={baseValue:F2} final={finalValue:F2} current={_current:F2} mode={blendMode} writeShared={writeToSharedMaterial}",
-                this);
-        }
+        // Distance debug logging removed (keeps console clean).
     }
 
     private float MapDistanceToPupil(float distance)

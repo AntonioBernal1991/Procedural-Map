@@ -58,6 +58,9 @@ public class CameraLookAtOnKey : MonoBehaviour
     private bool _fovAnimating;
     private bool _pendingActivateOnFovReached;
 
+    private bool _hasCachedMusicStateForActivation;
+    private bool _cachedMusicWasPlayingForActivation;
+
     public bool IsLookingAtTarget => _isLookingAtTarget;
 
     private void Awake()
@@ -119,7 +122,16 @@ public class CameraLookAtOnKey : MonoBehaviour
         if (activateOnFovReachedList != null && activateOnFovReachedList.Count >= 2)
         {
             bool playing = false;
-            BackgroundMusicPlayer.TryIsMusicPlaying(out playing);
+            if (_hasCachedMusicStateForActivation)
+            {
+                playing = _cachedMusicWasPlayingForActivation;
+                _hasCachedMusicStateForActivation = false; // one-shot cache
+            }
+            else
+            {
+                // Fallback: decide at activation time if caller didn't cache (e.g., manual key press).
+                BackgroundMusicPlayer.TryIsMusicPlaying(out playing);
+            }
             int index = playing ? 1 : 0;
 
             for (int i = 0; i < activateOnFovReachedList.Count; i++)
@@ -149,6 +161,16 @@ public class CameraLookAtOnKey : MonoBehaviour
     {
         if (_isLookingAtTarget) return;
         ToggleLookInternal(startLook: true);
+    }
+
+    /// <summary>
+    /// Call this right when the end trigger is crossed to "lock in" the music-playing state.
+    /// The activation (UI/gameobject) still happens when FOV is reached, but uses this cached decision.
+    /// </summary>
+    public void CacheMusicStateForFovReachedActivation()
+    {
+        BackgroundMusicPlayer.TryIsMusicPlaying(out _cachedMusicWasPlayingForActivation);
+        _hasCachedMusicStateForActivation = true;
     }
 
     /// <summary>

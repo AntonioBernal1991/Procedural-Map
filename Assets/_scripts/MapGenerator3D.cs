@@ -31,6 +31,16 @@ public class MapGenerator3D : MonoBehaviour, IMapGenerator
     [SerializeField] [Range(1f, 8f)] private float _voronoiThreshold = 2.0f; // Más pequeño = cuevas más pequeñas
     [SerializeField] [Range(0f, 3f)] private float _voronoiVariation = 0.3f; // Menos variación = más simétricas
     
+    [Header("Voronoi Cave Shapes (percent)")]
+    [Tooltip("Probability (%) that Voronoi caves use circular blobs.")]
+    [SerializeField] [Range(0f, 100f)] private float _voronoiCirclePercent = 70f;
+    [Tooltip("Probability (%) that Voronoi caves use square blobs.")]
+    [SerializeField] [Range(0f, 100f)] private float _voronoiSquarePercent = 20f;
+    [Tooltip("Probability (%) that Voronoi caves use cross/plus blobs.")]
+    [SerializeField] [Range(0f, 100f)] private float _voronoiCrossPercent = 10f;
+    [Tooltip("Cross arm thickness relative to the per-seed threshold. 0.25 means arms are 25% of the radius.")]
+    [SerializeField] [Range(0.05f, 0.9f)] private float _voronoiCrossArmWidthFactor = 0.25f;
+    
     [Header("Generation Control")]
     [Tooltip("If true, generation advances only while holding Space. If false, it runs automatically.")]
     [SerializeField] private bool _holdSpaceToGenerate = true;
@@ -85,6 +95,10 @@ public class MapGenerator3D : MonoBehaviour, IMapGenerator
     public int VoronoiSeeds => _voronoiSeeds;
     public float VoronoiThreshold => _voronoiThreshold;
     public float VoronoiVariation => _voronoiVariation;
+    public float VoronoiCirclePercent => _voronoiCirclePercent;
+    public float VoronoiSquarePercent => _voronoiSquarePercent;
+    public float VoronoiCrossPercent => _voronoiCrossPercent;
+    public float VoronoiCrossArmWidthFactor => _voronoiCrossArmWidthFactor;
     
     // Generation control (read by generators via MapGenerator3D.Instance)
     public bool HoldSpaceToGenerate => _holdSpaceToGenerate;
