@@ -16,20 +16,32 @@ public class MazeEndTriggerLookAt : MonoBehaviour
     [Tooltip("Optional: only trigger when the entering object is this Transform (or one of its children). " +
              "Useful if the player is the camera or another specific object.")]
     [SerializeField] private Transform requiredRoot;
+
     [Tooltip("If true and Required Root is empty, only triggers when the entering object belongs to Camera.main.")]
     [SerializeField] private bool requireMainCamera = true;
+
     [Tooltip("Optional tag filter. Leave empty to ignore tags.")]
     [SerializeField] private string requiredTag = "";
 
     [Header("Behavior")]
     [Tooltip("Delay before triggering the look-at sequence.")]
     [SerializeField] private float delaySeconds = 0f;
+
     [Tooltip("If true, this trigger will only fire once.")]
     [SerializeField] private bool triggerOnce = true;
-    [Tooltip("If true, disables the camera turning controls (A/D + swipe) when this trigger is hit.")]
-    [SerializeField] private bool disableCameraTurningOnTrigger = true;
+
+    [Tooltip("If true, disables AutoForwardCameraController entirely when this trigger is hit (stops movement + turning).")]
+    [SerializeField] private bool disableAutoForwardOnTrigger = true;
 
     private bool _hasTriggered;
+
+    /// <summary>
+    /// Resets this trigger so it can fire again (useful when replaying a run without a full scene reload).
+    /// </summary>
+    public void ResetTriggerState()
+    {
+        _hasTriggered = false;
+    }
 
     private void Reset()
     {
@@ -43,6 +55,7 @@ public class MazeEndTriggerLookAt : MonoBehaviour
         if (_hasTriggered && triggerOnce) return;
         if (other == null) return;
 
+        // Root filtering
         if (requiredRoot != null)
         {
             if (!IsSelfOrChild(other.transform, requiredRoot)) return;
@@ -53,9 +66,9 @@ public class MazeEndTriggerLookAt : MonoBehaviour
             if (c == null || Camera.main == null || c != Camera.main) return;
         }
 
+        // Tag filtering (allows tag on parent too)
         if (!string.IsNullOrWhiteSpace(requiredTag) && !other.CompareTag(requiredTag))
         {
-            // Also allow tag on parent (common if collider is a child)
             Transform t = other.transform;
             bool ok = false;
             while (t != null)
@@ -68,14 +81,21 @@ public class MazeEndTriggerLookAt : MonoBehaviour
 
         _hasTriggered = true;
 
-        if (disableCameraTurningOnTrigger)
+        // Notify game flow (optional).
+        if (GameManager.Instance != null)
         {
-            // Disable turning immediately when reaching the end trigger (so input can't fight the look-at).
+            GameManager.Instance.StartEndSequence();
+        }
+
+        if (disableAutoForwardOnTrigger)
+        {
+            // Disable auto-forward immediately when reaching the end trigger
+            // (so movement/turn input can't fight the look-at).
             Camera cam = Camera.main;
             if (cam != null)
             {
                 AutoForwardCameraController c = cam.GetComponent<AutoForwardCameraController>();
-                if (c != null) c.SetTurningEnabled(false);
+                if (c != null) c.enabled = false;
             }
         }
 
@@ -120,4 +140,3 @@ public class MazeEndTriggerLookAt : MonoBehaviour
         return false;
     }
 }
-

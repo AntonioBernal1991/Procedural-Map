@@ -22,6 +22,8 @@ public class BackgroundMusicPlayer : MonoBehaviour
     [SerializeField] private bool loop = true;
     [Tooltip("Start playback from this timestamp (seconds). Useful to start at the 'drop'/kick.")]
     [SerializeField] [Min(0f)] private float startAtSeconds = 0f;
+    [Tooltip("If true, starts playing immediately when this component wakes up. If false, call PlayMusic() (e.g. from GameManager).")]
+    [SerializeField] private bool autoPlayOnAwake = false;
 
     [Header("Lifecycle")]
     [Tooltip("Keep playing when loading other scenes. Prevents duplicates by name.")]
@@ -31,6 +33,40 @@ public class BackgroundMusicPlayer : MonoBehaviour
     private Coroutine _fadeRoutine;
     private Coroutine _panRoutine;
     private float _defaultPanStereo;
+
+    /// <summary>
+    /// Starts music playback on the active BackgroundMusicPlayer instance (if any).
+    /// Returns true if an instance existed and was told to play.
+    /// </summary>
+    public static bool TryPlayMusic(bool restart = true)
+    {
+        if (_instance == null) return false;
+        _instance.PlayMusic(restart);
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the music clip on the active BackgroundMusicPlayer instance (if any).
+    /// If <paramref name="clip"/> is null, does nothing and returns false.
+    /// </summary>
+    public static bool TrySetMusicClip(AudioClip clip)
+    {
+        if (_instance == null) return false;
+        if (clip == null) return false;
+        _instance.SetMusicClip(clip);
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the "start at seconds" timestamp on the active BackgroundMusicPlayer instance (if any).
+    /// Returns true if an instance existed and was updated.
+    /// </summary>
+    public static bool TrySetStartAtSeconds(float startAtSeconds)
+    {
+        if (_instance == null) return false;
+        _instance.SetStartAtSeconds(startAtSeconds);
+        return true;
+    }
 
     /// <summary>
     /// Stops the music on the active BackgroundMusicPlayer instance (if any).
@@ -308,7 +344,6 @@ public class BackgroundMusicPlayer : MonoBehaviour
                     if (_instance._source != null)
                     {
                         _instance._source.clip = musicClip;
-                        if (!_instance._source.isPlaying) _instance._source.Play();
                     }
                 }
                 Destroy(gameObject);
@@ -334,14 +369,57 @@ public class BackgroundMusicPlayer : MonoBehaviour
             _source.clip = musicClip;
         }
 
-        if (_source.clip != null)
+        if (autoPlayOnAwake)
+        {
+            PlayMusic(restart: true);
+        }
+    }
+
+    private void SetMusicClip(AudioClip clip)
+    {
+        if (_source == null) _source = GetComponent<AudioSource>();
+        if (clip == null) return;
+        musicClip = clip;
+        if (_source != null) _source.clip = clip;
+    }
+
+    private void SetStartAtSeconds(float startAtSecondsValue)
+    {
+        startAtSeconds = Mathf.Max(0f, startAtSecondsValue);
+    }
+
+    /// <summary>
+    /// Starts playing the configured clip. If restart=true, seeks to startAtSeconds before playing.
+    /// </summary>
+    public void PlayMusic(bool restart = true)
+    {
+        if (_source == null) _source = GetComponent<AudioSource>();
+        if (_source == null) return;
+
+        // Ensure settings are applied.
+        _source.loop = loop;
+        _source.volume = volume;
+
+        if (_source.clip == null && musicClip != null)
+        {
+            _source.clip = musicClip;
+        }
+
+        if (_source.clip == null) return;
+
+        if (restart)
         {
             if (startAtSeconds > 0f && _source.clip.length > 0f)
             {
                 _source.time = Mathf.Clamp(startAtSeconds, 0f, Mathf.Max(0f, _source.clip.length - 0.01f));
             }
-            _source.Play();
+            else
+            {
+                _source.time = 0f;
+            }
         }
+
+        _source.Play();
     }
     
     private void OnDestroy()

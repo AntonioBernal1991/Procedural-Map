@@ -63,6 +63,49 @@ public class CameraLookAtOnKey : MonoBehaviour
 
     public bool IsLookingAtTarget => _isLookingAtTarget;
 
+    public void SetTarget(Transform newTarget)
+    {
+        target = newTarget;
+    }
+
+    /// <summary>
+    /// Resets the internal "look-at" state so a new run/scene can trigger the sequence again.
+    /// Does not change the assigned target; it just makes the current pose the new baseline.
+    /// </summary>
+    public void ForceResetLookStateToCurrentPose()
+    {
+        // Cancel any in-flight rotations/FOV work.
+        _rotating = false;
+        _t = 0f;
+
+        _fovAnimating = false;
+        _fovT = 0f;
+        _pendingActivateOnFovReached = false;
+
+        // Clear cached activation decision (one-shot).
+        _hasCachedMusicStateForActivation = false;
+
+        // Treat current transform pose as the new "not looking" baseline.
+        _isLookingAtTarget = false;
+        _savedRotation = transform.rotation;
+        if (_cam == null) _cam = GetComponent<Camera>();
+        if (_cam != null) _savedFov = _cam.fieldOfView;
+    }
+
+    public void ForceResetFov(float fov)
+    {
+        if (_cam == null) _cam = GetComponent<Camera>();
+        if (_cam == null) return;
+
+        // Cancel any pending/active FOV animation and restore baseline.
+        _fovAnimating = false;
+        _pendingActivateOnFovReached = false;
+        _fovT = 0f;
+
+        _cam.fieldOfView = fov;
+        _savedFov = fov;
+    }
+
     private void Awake()
     {
         _cam = GetComponent<Camera>();

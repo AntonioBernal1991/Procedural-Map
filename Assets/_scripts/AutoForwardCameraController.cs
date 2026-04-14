@@ -39,6 +39,16 @@ public class AutoForwardCameraController : MonoBehaviour
     [Tooltip("If true, shows the LockedCube prompt only when the player does NOT have a key (typical 'need key' UX).")]
     [SerializeField] private bool showLockedPromptOnlyWhenNoKey = true;
 
+    [Header("Keys / Inventory - UI (optional)")]
+    [Tooltip("Optional UI GameObject (usually under Canvas) that indicates the player has a key.")]
+    [SerializeField] private GameObject keyUiObject;
+    [Tooltip("If Key UI Object is null, tries to find a global UI object by name (supports inactive objects).")]
+    [SerializeField] private bool autoFindKeyUiByName = true;
+    [Tooltip("Name of the global UI GameObject to use as key indicator (e.g., Key).")]
+    [SerializeField] private string keyUiObjectName = "Key";
+    [Tooltip("Minimum seconds between auto-find attempts.")]
+    [SerializeField] [Min(0f)] private float keyUiFindRetrySeconds = 0.5f;
+
     [Header("Mobile Turning (Swipe)")]
     [Tooltip("Enable swipe left/right as an alternative to A/D for turning 90 degrees.")]
     [SerializeField] private bool enableSwipeTurns = true;
@@ -76,10 +86,12 @@ public class AutoForwardCameraController : MonoBehaviour
     private bool _swipeTurnRight;
 
     private LockedCube _lockedPromptTarget;
+    private float _lastKeyUiFindAttempt = -999f;
 
     private void Awake()
     {
         _cc = GetComponent<CharacterController>();
+        ResolveKeyUiIfNeeded(force: true);
 
         if (disableOcclusionCulling)
         {
@@ -90,16 +102,81 @@ public class AutoForwardCameraController : MonoBehaviour
 
     public bool HasKey => hasKey;
 
+    // Expose a few runtime-tunable parameters for per-run tuning (via GameManager + ScriptableObjects).
+    public float MoveSpeed
+    {
+        get => moveSpeed;
+        set => moveSpeed = Mathf.Max(0f, value);
+    }
+
+    public float StopDistance
+    {
+        get => stopDistance;
+        set => stopDistance = Mathf.Max(0f, value);
+    }
+
+    public float TurnDuration
+    {
+        get => turnDuration;
+        set => turnDuration = Mathf.Max(0f, value);
+    }
+
     public void GiveKey()
     {
         hasKey = true;
+        SetKeyUiActive(true);
     }
 
     public bool ConsumeKey()
     {
         if (!hasKey) return false;
         hasKey = false;
+        SetKeyUiActive(false);
         return true;
+    }
+
+    public void SetKeyUiActive(bool active)
+    {
+        ResolveKeyUiIfNeeded();
+        if (keyUiObject == null) return;
+        if (keyUiObject.activeSelf == active) return;
+        keyUiObject.SetActive(active);
+    }
+
+    private void ResolveKeyUiIfNeeded(bool force = false)
+    {
+        if (keyUiObject != null) return;
+        if (!autoFindKeyUiByName) return;
+        if (string.IsNullOrWhiteSpace(keyUiObjectName)) return;
+
+        float now = Time.unscaledTime;
+        float retry = Mathf.Max(0f, keyUiFindRetrySeconds);
+        if (!force && (now - _lastKeyUiFindAttempt) < retry) return;
+        _lastKeyUiFindAttempt = now;
+
+        keyUiObject = FindUiGameObjectByNameIncludingInactive(keyUiObjectName);
+    }
+
+    private static GameObject FindUiGameObjectByNameIncludingInactive(string exactName)
+    {
+        if (string.IsNullOrWhiteSpace(exactName)) return null;
+
+        GameObject best = null;
+        GameObject[] all = Resources.FindObjectsOfTypeAll<GameObject>();
+        for (int i = 0; i < all.Length; i++)
+        {
+            GameObject go = all[i];
+            if (go == null) continue;
+            if (go.name != exactName) continue;
+            if (!go.scene.IsValid() || !go.scene.isLoaded) continue;
+            if (go.hideFlags != HideFlags.None) continue;
+
+            // Prefer UI objects.
+            if (go.GetComponent<RectTransform>() != null) return go;
+            if (best == null) best = go;
+        }
+
+        return best;
     }
 
     private void Update()
@@ -316,19 +393,19 @@ public class AutoForwardCameraController : MonoBehaviour
 
         // Proximity prompt for locked cubes: show/hide based on cast (works even if we stop before triggers).
         LockedCube locked = info.collider != null ? info.collider.GetComponentInParent<LockedCube>() : null;
-        bool shouldShowPrompt = locked != null && !locked.IsUnlocked;
+        bool shouldShowPrompt = locked != null && !locked.IsUnlocked && !locked.IsUnlocking;
         if (shouldShowPrompt && showLockedPromptOnlyWhenNoKey && hasKey) shouldShowPrompt = false;
         // Only show when it's not a pure side graze (same rule we use for movement logic).
         if (shouldShowPrompt && facing > slideWhenFacingDotIsAtMost) shouldShowPrompt = false;
         UpdateLockedPrompt(locked, shouldShowPrompt);
 
-        // If we hit a locked cube and we have a key, unlock it and keep moving.
+        // If we hit a locked cube and we have a key, start unlock (fade). We only move through once it is disabled.
         if (locked != null && hasKey)
         {
             if (locked.TryUnlock(this))
             {
                 UpdateLockedPrompt(locked, false);
-                return planarForward;
+                // Don't force movement this frame; the cube still blocks until fade completes.
             }
         }
 

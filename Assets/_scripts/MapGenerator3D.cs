@@ -117,12 +117,29 @@ public class MapGenerator3D : MonoBehaviour, IMapGenerator
         else
         {
             Instance = this;
+            // IMPORTANT (additive scenes):
+            // When Run0 is loaded additively from a Main scene, Awake() can run while Main is still the active scene.
+            // If we create a new GameObject without parenting it, Unity places it in the *active* scene,
+            // which can leak all generated geometry into Main and explode batches.
+            // Always parent MazeRoot under this generator so it lives in the same scene and unloads correctly.
             _mazeRoot = new GameObject("MazeRoot").transform;
-            _mazeRoot.position = Vector3.zero;
+            _mazeRoot.SetParent(transform, worldPositionStays: false);
+            _mazeRoot.localPosition = Vector3.zero;
+            _mazeRoot.localRotation = Quaternion.identity;
             // +1 to allow a final "blocker" module without reallocations.
             pool = new ObjectPool(_cubePrefab, _chunkWidth * _chunkHeight * (_numModules + 1));
             pathGenerator = new PathGenerator(this, pool);    
             module = new ModuleGenerator(this, pool, _mazeRoot);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        // If something ever detached MazeRoot, ensure we don't leave generated geometry behind.
+        if (Instance == this) Instance = null;
+        if (_mazeRoot != null && _mazeRoot.parent != transform)
+        {
+            Destroy(_mazeRoot.gameObject);
         }
     }
 

@@ -20,9 +20,22 @@ public class KeyPickup : MonoBehaviour
     [Header("On Pickup (optional)")]
     [Tooltip("Optional GameObject to activate when the key is picked up (e.g., a UI icon).")]
     [SerializeField] private GameObject activateOnPickup;
+    [Tooltip("If Activate On Pickup is null, tries to find a global UI object by name (supports inactive objects).")]
+    [SerializeField] private bool autoFindUiByName = true;
+    [Tooltip("Name of the global UI GameObject to activate on pickup (e.g., Key).")]
+    [SerializeField] private string uiObjectName = "Key";
+    [Tooltip("Minimum seconds between auto-find attempts (prevents expensive searches every trigger call).")]
+    [SerializeField] [Min(0f)] private float uiFindRetrySeconds = 0.5f;
 
     [Header("Debug")]
     [SerializeField] private bool logPickup = false;
+
+    private float _lastUiFindAttempt = -999f;
+
+    private void Awake()
+    {
+        ResolveActivateOnPickupIfNeeded(force: true);
+    }
 
     private void Reset()
     {
@@ -52,6 +65,7 @@ public class KeyPickup : MonoBehaviour
         player.GiveKey();
         if (logPickup) Debug.Log($"[KeyPickup] Picked up key '{name}'.", this);
 
+        ResolveActivateOnPickupIfNeeded();
         if (activateOnPickup != null)
         {
             activateOnPickup.SetActive(true);
@@ -77,6 +91,47 @@ public class KeyPickup : MonoBehaviour
             t = t.parent;
         }
         return false;
+    }
+
+    private void ResolveActivateOnPickupIfNeeded(bool force = false)
+    {
+        if (activateOnPickup != null) return;
+        if (!autoFindUiByName) return;
+        if (string.IsNullOrWhiteSpace(uiObjectName)) return;
+
+        float now = Time.unscaledTime;
+        float retry = Mathf.Max(0f, uiFindRetrySeconds);
+        if (!force && (now - _lastUiFindAttempt) < retry) return;
+        _lastUiFindAttempt = now;
+
+        activateOnPickup = FindUiGameObjectByNameIncludingInactive(uiObjectName);
+    }
+
+    private GameObject FindUiGameObjectByNameIncludingInactive(string exactName)
+    {
+        if (string.IsNullOrWhiteSpace(exactName)) return null;
+
+        GameObject best = null;
+        GameObject[] all = Resources.FindObjectsOfTypeAll<GameObject>();
+        for (int i = 0; i < all.Length; i++)
+        {
+            GameObject go = all[i];
+            if (go == null) continue;
+            if (go.name != exactName) continue;
+            if (!go.scene.IsValid() || !go.scene.isLoaded) continue;
+            if (go.hideFlags != HideFlags.None) continue;
+
+            // Avoid binding to the 3D key pickup itself (common if it's also named "Key").
+            if (go == gameObject) continue;
+            Transform t = go.transform;
+            if (t != null && (t == transform || t.IsChildOf(transform))) continue;
+
+            // Prefer UI objects.
+            if (go.GetComponent<RectTransform>() != null) return go;
+            if (best == null) best = go;
+        }
+
+        return best;
     }
 }
 
